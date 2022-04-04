@@ -1,0 +1,147 @@
+---
+title: "excercise-09"
+author: "Ajna Kertesz"
+date: "4/3/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+```{r chunk 2, echo=FALSE}
+
+library(tidyverse)
+library(car)
+library(mosaic)
+library(skimr)
+library(sjPlot)
+
+
+link <- "https://raw.githubusercontent.com/difiore/ada-2022-datasets/main/Street_et_al_2017.csv"
+d<- read_csv(link, col_names = TRUE)
+
+d<- drop_na(d)
+
+#five number summer
+skim(d)
+
+# models predicting ECV
+model_group_size<-lm(formula=ECV~Group_size, data=d)
+model_longevity<-lm(formula=ECV~Longevity, data=d)
+model_weaning<-lm(formula=ECV~Weaning, data=d)
+model_repro_lifespan<-lm(formula=ECV~Repro_lifespan, data=d)
+
+tab_model(model_group_size, model_longevity, model_weaning, model_repro_lifespan)
+
+#ordinary least squares regession and b0, b1 by hand
+
+n<-nrow(d)
+n
+
+#filter the data for NAs
+d<-d %>% drop_na(ECV, Group_size)
+
+#get beta1 by hand
+(beta1 <- cor(d$Group_size, d$ECV) * (sd(d$ECV) / sd(d$Group_size))) #2.463071
+beta1
+
+(beta0 <- mean(d$ECV) - beta1 * mean(d$Group_size)) #30.356
+beta0
+
+##calculate se
+
+residuals<-d$ECV-(beta0+beta1*d$Group_size)
+num<-sum(residuals^2)/length(residuals)-2
+den<-sum((d$Group_size-mean(d$Group_size))^2)
+
+SE_b1<- sqrt(num/den)
+SE_b1 #0.348
+
+SE_b0<-SE_b1*sqrt(
+  sum(d$Group_size^2)/n)
+SE_b0 #4.78
+
+beta1/SE_b1 #7.07
+
+#Repeat the analysis above for three different major radiations of primates – “catarrhines,” “platyrrhines,” and “strepsirhines”) separately. These are stored in the variable Taxonomic_group.
+
+Plat_group <- d[d$Taxonomic_group == "Platyrrhini", ]
+plat_model<-lm(formula=ECV~Group_size, data=Plat_group)
+
+Catar_group <- d[d$Taxonomic_group == "Catarrhini", ]
+catar_model<-lm(formula=ECV~Group_size, data=Catar_group)
+
+Strep_group <- d[d$Taxonomic_group == "Strepsirhini", ]
+strep_model<-lm(formula=ECV~Group_size, data=Strep_group)
+
+tab_model(plat_model, catar_model, strep_model)
+
+#compare models
+
+anova(model_group_size)
+anova(plat_model)
+anova(catar_model)
+anova(strep_model)
+
+#For your first regression of ECV on social group size, calculate the standard error for the slope coefficient, the 95% CI, and the p value associated with this coefficient by hand. Also extract this same information from the results of running the lm() function.
+
+ci_t<-beta1+ c(-1,1)*qt(1-0.05/2,df=n-2)*SE_b1
+ci_t #1.77
+
+CI<-confint(model, level=1-0.05)
+CI
+
+#regression in r
+model<-lm(formula=ECV~Group_size, data=d)
+model
+
+summary(model)
+
+##permutation
+
+library(infer)
+
+permuted.slope <- d %>%
+  specify(ECV ~ Group_size) %>%
+  hypothesize(null = "independence") %>%
+  generate(reps = 1000, type = "permute") %>%
+  calculate(stat = "slope")
+
+head(permuted.slope)
+
+hist(permuted.slope$stat, main="Histogram of Permuted\nSlope Values",
+  xlab = "Slope Coefficient")
+
+
+library(broom)
+original.slope <- lm(data = d, ECV ~ Group_size) %>%
+  tidy(conf.int=TRUE, conf.level=.95) %>%
+  filter(term=="Group_size")
+
+
+visualize(permuted.slope) +
+  shade_p_value(obs_stat = original.slope$estimate, direction = "two_sided")
+
+p.value <- permuted.slope %>% 
+  mutate(abs_stat=abs(stat)) %>%
+  summarize(estimate = mean(abs_stat >= abs(pull(original.slope, estimate))))
+
+p.value
+
+#Use bootstrapping to generate a 95% CI for your estimate of the slope coefficient using both the percentile method and the theory-based method (i.e., based on the standard deviation of the bootstrapped sampling distribution). Do these CIs suggest that your slope coefficient is different from zero?
+
+n_boot <- 10000
+boot <- vector(length = n_boot) 
+for (i in 1:n_boot) {
+    boot[[i]] <- 
+boot[[i]] <- mean(sample(na.omit(d) %>% select_if(is.numeric), n, replace = TRUE))
+    
+} #this is giving me all NAs for some reason, even though there are no more NAs in the dataset
+
+
+
+```
+
